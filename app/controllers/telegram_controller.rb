@@ -1,4 +1,5 @@
 require 'net/http'
+require 'uri'
 
 class TelegramController < Telegram::Bot::UpdatesController
   include Telegram::Bot::UpdatesController::MessageContext
@@ -10,11 +11,29 @@ class TelegramController < Telegram::Bot::UpdatesController
       return respond_with :message, text: "Нераспознанная команда. Ожидается фото моллюска."
     end
 
-    download_url = telegram_file_download_path(message['photo'].last['file_id']) # Only last photo.
+    photo_data = message["photo"].last["file_id"] # Only last photo.
+    download_url = telegram_file_download_path(photo_data)
     respond_with :message, text: "Проблемы с картинкой. Попробуйте прислать другую." unless download_url
-    model_output = get_model_output(download_url)
 
-    respond_with :message, text: "Не могу распознать моллюска" unless model_output
+    model_output = get_model_output(download_url)
+    decoded_image = Base64.decode64(model_output["image"])
+
+    species = Species.find_by(name: model_output['predicted class'])
+
+    observation = Observation.create(species_id: species.id)
+    observation.photo.attach(
+      io: StringIO.new(decoded_image),
+      content_type: 'image/jpeg',
+      filename: "#{photo_data["file_unique_id"]}.jpg"
+    )
+
+    response = send_photo(chat_id: message["chat"]["id"], photo: observation.photo, caption: "Результат работы модели:")
+    # response = send_photo(chat_id: message["chat"]["id"], photo: observation.photo)
+    puts "======================="
+    puts response.code
+    puts response.msg
+    puts response.body
+    puts "======================="
 
     species, encoded_image = model_output['predicted class'], model_output['image']
     respond_with :message, text: "Ваш моллюск класса #{species}"
@@ -31,6 +50,7 @@ class TelegramController < Telegram::Bot::UpdatesController
     }
 
     return nil unless res.body
+
     JSON.parse res.body
   end
 

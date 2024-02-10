@@ -44,7 +44,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_02_10_100055) do
 
   create_table "observations", force: :cascade do |t|
     t.bigint "species_id", null: false
-    t.bigint "place_id", null: false
+    t.bigint "place_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["place_id"], name: "index_observations_on_place_id"
@@ -66,6 +66,5 @@ ActiveRecord::Schema[7.1].define(version: 2024_02_10_100055) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
-  add_foreign_key "observations", "places"
   add_foreign_key "observations", "species"
 end
