@@ -66,3 +66,7 @@ group :test do
   gem "capybara"
   gem "selenium-webdriver"
 end
+
+gem "dotenv-rails", "~> 2.8", :groups => [:development, :test]
+
+gem "telegram-bot", "~> 0.16.1"
