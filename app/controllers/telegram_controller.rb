@@ -2,6 +2,7 @@ require 'net/http'
 
 class TelegramController < Telegram::Bot::UpdatesController
   include Telegram::Bot::UpdatesController::MessageContext
+  include TelegramControllerHelper
 
   def message(message)
     puts message
@@ -9,7 +10,7 @@ class TelegramController < Telegram::Bot::UpdatesController
       return respond_with :message, text: "Нераспознанная команда. Ожидается фото моллюска."
     end
 
-    download_url = download_url_by_file_id(message['photo'].last['file_id']) # Only last photo.
+    download_url = telegram_file_download_path(message['photo'].last['file_id']) # Only last photo.
     respond_with :message, text: "Проблемы с картинкой. Попробуйте прислать другую." unless download_url
     model_output = get_model_output(download_url)
 
@@ -19,14 +20,6 @@ class TelegramController < Telegram::Bot::UpdatesController
     respond_with :message, text: "Ваш моллюск класса #{species}"
 
     geolocation_request_keyboard_message
-  end
-
-  private def download_url_by_file_id(file_id)
-    file_info = Telegram.bot.get_file(file_id: file_id)
-    file_path = file_info['result']['file_path']
-    token = Rails.application.credentials[:telegram][:bot]
-
-    "https://api.telegram.org/file/bot#{token}/#{file_path}"
   end
 
   private def get_model_output(tg_photo)
