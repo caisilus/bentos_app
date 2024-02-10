@@ -11,47 +11,61 @@ class TelegramController < Telegram::Bot::UpdatesController
       return respond_with :message, text: "Нераспознанная команда. Ожидается фото моллюска."
     end
 
-    photo_data = message["photo"].last["file_id"] # Only last photo.
-    download_url = telegram_file_download_path(photo_data)
-    respond_with :message, text: "Проблемы с картинкой. Попробуйте прислать другую." unless download_url
+    photos = message["photo"].values_at(*(1..message["photo"].length).step(2))
 
-    model_output = get_model_output(download_url)
-    decoded_image = Base64.decode64(model_output["image"])
+    photo_urls = photos.map { |photo| telegram_file_download_path(photo["file_id"]) }
+    puts photo_urls
 
-    species = Species.find_by(name: model_output['predicted class'])
+    respond_with :message, text: "Проблемы с картинкой. Попробуйте прислать другую." unless photo_urls.any?
 
-    observation = Observation.create(species_id: species.id)
-    observation.photo.attach(
-      io: StringIO.new(decoded_image),
-      content_type: 'image/jpeg',
-      filename: "#{photo_data["file_unique_id"]}.jpg"
-    )
+    observation = Observation.create
 
-    response = send_photo(chat_id: message["chat"]["id"], photo: observation.photo, caption: "Результат работы модели:")
-    # response = send_photo(chat_id: message["chat"]["id"], photo: observation.photo)
-    puts "======================="
-    puts response.code
-    puts response.msg
-    puts response.body
-    puts "======================="
+    respond_with :message, text: "Модель обрабатывает запрос, подождите..."
 
-    species, encoded_image = model_output['predicted class'], model_output['image']
-    respond_with :message, text: "Ваш моллюск класса #{species}"
+    model_output = get_model_output(photo_urls)
+    puts "=========OUTPUT========="
+    puts model_output
+    model_output.each_with_index do |json, i|
+      decoded_image = Base64.decode64(json["image"])
+      detections = json["detections"]
+      names = detections.map {|detection| detection['name']}
+      species = Species.find_or_create_by(name: names)
+
+      observation.photos.attach(
+        io: StringIO.new(decoded_image),
+        content_type: 'image/jpeg',
+        filename: "#{photos[i]["file_unique_id"]}.jpg"
+      )
+    end
+
+    if observation.photos.count == 0
+      return respond_with :message, text: "Не удалось распознать моллюсков на фото."
+    else
+      observation.photos.each do |photo|
+        response = send_photo(chat_id: message["chat"]["id"], photo: photo,
+                              caption: "Результат работы модели:")
+      end
+    end
 
     geolocation_request_keyboard_message
   end
 
-  private def get_model_output(tg_photo)
+  private def get_model_output(photo_urls)
     url = URI.parse(ENV["MODEL_SERVICE_URL"])
+    puts url
 
-    req = Net::HTTP::Get.new(url.to_s)
-    res = Net::HTTP.start(url.host, url.port) {|http|
-      http.request(req)
-    }
+    req = Net::HTTP::Post.new(url.to_s, 'Content-Type': 'application/json')
+    req.body = { "url": photo_urls }.to_json
+
+    puts "TRYING TO REQUEST"
+    http = Net::HTTP.new(url.host, url.port)
+    http.use_ssl = (url.scheme == "https")
+
+    res = http.request(req)
 
     return nil unless res.body
 
-    JSON.parse res.body
+    return JSON.parse res.body
   end
 
   private def geolocation_request_keyboard_message

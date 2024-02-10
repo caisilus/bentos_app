@@ -1,4 +1,4 @@
 class Species < ApplicationRecord
-  has_many :observations
-  has_many :species, through: :places
+  has_and_belongs_to_many :observations
+  validates :name, uniqueness: true
 end
