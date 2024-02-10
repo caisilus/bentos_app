@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_02_10_100055) do
+ActiveRecord::Schema[7.1].define(version: 2024_02_10_154901) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -43,12 +43,17 @@ ActiveRecord::Schema[7.1].define(version: 2024_02_10_100055) do
   end
 
   create_table "observations", force: :cascade do |t|
-    t.bigint "species_id", null: false
     t.bigint "place_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["place_id"], name: "index_observations_on_place_id"
-    t.index ["species_id"], name: "index_observations_on_species_id"
+  end
+
+  create_table "observations_species", id: false, force: :cascade do |t|
+    t.bigint "observation_id", null: false
+    t.bigint "species_id", null: false
+    t.index ["observation_id", "species_id"], name: "index_observations_species_on_observation_id_and_species_id"
+    t.index ["species_id", "observation_id"], name: "index_observations_species_on_species_id_and_observation_id"
   end
 
   create_table "places", force: :cascade do |t|
@@ -66,5 +71,4 @@ ActiveRecord::Schema[7.1].define(version: 2024_02_10_100055) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
-  add_foreign_key "observations", "species"
 end

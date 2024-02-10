@@ -25,7 +25,7 @@ unless Observation.any?
   species1 = Species.first
   species2 = Species.second
 
-  Observation.create(place: place1, species: species1)
-  Observation.create(place: place1, species: species2)
-  Observation.create(place: place2, species: species2)
+  Observation.create(place: place1, species: [species1, species2])
+  Observation.create(place: place1, species: [species2])
+  Observation.create(place: place2, species: [species2])
 end
