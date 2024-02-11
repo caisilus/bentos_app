@@ -3,40 +3,33 @@ require 'uri'
 
 class TelegramController < Telegram::Bot::UpdatesController
   include Telegram::Bot::UpdatesController::MessageContext
+  include Telegram::Bot::UpdatesController::Session
+
   include TelegramControllerHelper
 
+  def start!(*)
+    respond_with :message, text: "Здравствуйте! Для начала работы, отправьте фотографию моллюска, " +
+                                 "найденного на побережье Азовского Моря!"
+  end
+
   def message(message)
-    puts message
     if message['photo'].nil?
       return respond_with :message, text: "Нераспознанная команда. Ожидается фото моллюска."
     end
 
-    photos = message["photo"].values_at(*(1..message["photo"].length).step(2))
-
+    photos = filter_photos(message["photos"])
     photo_urls = photos.map { |photo| telegram_file_download_path(photo["file_id"]) }
+
     puts photo_urls
 
     respond_with :message, text: "Проблемы с картинкой. Попробуйте прислать другую." unless photo_urls.any?
 
-    observation = Observation.create
-
     respond_with :message, text: "Модель обрабатывает запрос, подождите..."
 
-    model_output = get_model_output(photo_urls)
-    puts "=========OUTPUT========="
-    puts model_output
-    model_output.each_with_index do |json, i|
-      decoded_image = Base64.decode64(json["image"])
-      detections = json["detections"]
-      names = detections.map {|detection| detection['name']}
-      species = Species.find_or_create_by(name: names)
+    observation = Observation.create
 
-      observation.photos.attach(
-        io: StringIO.new(decoded_image),
-        content_type: 'image/jpeg',
-        filename: "#{photos[i]["file_unique_id"]}.jpg"
-      )
-    end
+    model_output = get_model_output(photo_urls)
+    update_observation_data(photos, model_output, observation)
 
     if observation.photos.count == 0
       return respond_with :message, text: "Не удалось распознать моллюсков на фото."
@@ -47,7 +40,22 @@ class TelegramController < Telegram::Bot::UpdatesController
       end
     end
 
+    session["observation_id"] = observation.id
     geolocation_request_keyboard_message
+  end
+
+  private def filter_photos(photos)
+    filtered_photos = {}
+
+    photos.each do |photo|
+      index = photo["file_id"]
+
+      filtered_photos[index] = photo unless filtered_photos.key? index
+
+      filtered_photos[index] = photo if photo["file_size"] > filtered_photos[index]
+    end
+
+    filter_photos.values
   end
 
   private def get_model_output(photo_urls)
@@ -66,6 +74,17 @@ class TelegramController < Telegram::Bot::UpdatesController
     return nil unless res.body
 
     return JSON.parse res.body
+  end
+
+  private def update_observation_data(photos, model_output, observation)
+    model_output.each_with_index do |json, i|
+      species_names = json["detections"].map {|detection| detection['name']}
+
+      species = Species.find_or_create_by(name: species_names)
+      species.each { |sp| observation.species << sp }
+
+      observation.attach_base64_photo(json["image"], "#{photos[i]["file_unique_id"]}.jpg")
+    end
   end
 
   private def geolocation_request_keyboard_message
@@ -95,6 +114,14 @@ class TelegramController < Telegram::Bot::UpdatesController
     end
 
     location = update["message"]["location"]
-    respond_with :message, text: "Вы находитесь на #{location["latitude"]}, #{location["longitude"]}"
+
+    return respond_with :message, text: "Не могу определить географические коррдинаты :(" unless location
+
+    observation = Observation.find_by_id(session["observation_id"])
+    place = Place.create(latitude: location["latitude"], longtitude: location["longitude"])
+    observation.place = place if observation
+
+    respond_with :message, text: "Место наблюдения моллюсков #{location["latitude"]}, #{location["longitude"]} " +
+                                 "добавлено в базу данных"
   end
 end
