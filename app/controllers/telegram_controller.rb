@@ -12,6 +12,42 @@ class TelegramController < Telegram::Bot::UpdatesController
                                  "найденного на побережье Азовского Моря!"
   end
 
+  def data!()
+    save_context :species_name_sent
+    respond_with :message, text: "Введите полное название вида моллюска"
+  end
+
+  def species_name_sent(*)
+    unless update["message"] && update["message"]["text"]
+      return respond_with :message, text: "Ожидается текстовое сообщение с названием моллюск."
+    end
+
+    name = update["message"]["text"]
+    species = Species.find_by(name: name)
+
+    unless species
+      save_context :species_name_sent
+      return respond_with :message, text: "Неизвестный вид. Попробуйте другой"
+    end
+
+    data = species.observations.joins(:place)
+
+    puts data
+    write_to_csv(data)
+    respond_with :message, text: "Dummy"
+  end
+
+  private def write_to_csv(data, filename: "data.csv", separator: ",")
+    File.open(filename, "w") do |f|
+      headers = %w[observation place_id latitude longitude]
+      f.write headers.join(separator) + "\n"
+      data.each do |row|
+        csv_row = [row.id, row.place.id, row.place.latitude, row.place.longtitude]
+        f.write csv_row.join(separator) + "\n"
+      end
+    end
+  end
+
   def message(message)
     if message['photo'].nil?
       return respond_with :message, text: "Нераспознанная команда. Ожидается фото моллюска."
@@ -29,14 +65,14 @@ class TelegramController < Telegram::Bot::UpdatesController
     observation = Observation.create
 
     model_output = get_model_output(photo_urls)
-    update_observation_data(photos, model_output, observation)
+    species_names = update_observation_data(photos, model_output, observation)
 
     if observation.photos.count == 0
       return respond_with :message, text: "Не удалось распознать моллюсков на фото."
     else
       observation.photos.each do |photo|
         response = send_photo(chat_id: message["chat"]["id"], photo: photo,
-                              caption: "Результат работы модели:")
+                              caption: "Результат работы модели: #{species_names.join(", ")}")
       end
     end
 
@@ -77,16 +113,20 @@ class TelegramController < Telegram::Bot::UpdatesController
   end
 
   private def update_observation_data(photos, model_output, observation)
+    total_species_names = []
     model_output.each_with_index do |json, i|
       species_names = json["detections"].map {|detection| detection['name']}
 
       species_names.each do |name|
         species = Species.find_or_create_by(name: name)
         observation.species << species
+        total_species_names << name
       end
 
       observation.attach_base64_photo(json["image"], "#{photos[i]["file_unique_id"]}.jpg")
     end
+
+    total_species_names.uniq
   end
 
   private def geolocation_request_keyboard_message
