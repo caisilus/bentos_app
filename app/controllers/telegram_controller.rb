@@ -17,7 +17,7 @@ class TelegramController < Telegram::Bot::UpdatesController
       return respond_with :message, text: "Нераспознанная команда. Ожидается фото моллюска."
     end
 
-    photos = filter_photos(message["photos"])
+    photos = filter_photos(message["photo"])
     photo_urls = photos.map { |photo| telegram_file_download_path(photo["file_id"]) }
 
     puts photo_urls
@@ -52,10 +52,10 @@ class TelegramController < Telegram::Bot::UpdatesController
 
       filtered_photos[index] = photo unless filtered_photos.key? index
 
-      filtered_photos[index] = photo if photo["file_size"] > filtered_photos[index]
+      filtered_photos[index] = photo if photo["file_size"] > filtered_photos[index]["file_size"]
     end
 
-    filter_photos.values
+    filtered_photos.values
   end
 
   private def get_model_output(photo_urls)
@@ -80,8 +80,10 @@ class TelegramController < Telegram::Bot::UpdatesController
     model_output.each_with_index do |json, i|
       species_names = json["detections"].map {|detection| detection['name']}
 
-      species = Species.find_or_create_by(name: species_names)
-      species.each { |sp| observation.species << sp }
+      species_names.each do |name|
+        species = Species.find_or_create_by(name: name)
+        observation.species << species
+      end
 
       observation.attach_base64_photo(json["image"], "#{photos[i]["file_unique_id"]}.jpg")
     end
@@ -102,9 +104,11 @@ class TelegramController < Telegram::Bot::UpdatesController
     case data
     when "geo_accept"
       save_context :geolocation_await
+      respond_with :message, text: "Отправьте геолокацию!"
       answer_callback_query "Отправьте геолокацию!"
     when "geo_decline"
-      answer_callback_query "Не нужна мне твоя геолока!"
+      respond_with :message, text: "Сохранено без геолокации."
+      answer_callback_query "Сохранено без геолокации."
     end
   end
 
@@ -118,8 +122,11 @@ class TelegramController < Telegram::Bot::UpdatesController
     return respond_with :message, text: "Не могу определить географические коррдинаты :(" unless location
 
     observation = Observation.find_by_id(session["observation_id"])
+    puts "OBSERVATION:"
+    puts observation
     place = Place.create(latitude: location["latitude"], longtitude: location["longitude"])
     observation.place = place if observation
+    observation.save
 
     respond_with :message, text: "Место наблюдения моллюсков #{location["latitude"]}, #{location["longitude"]} " +
                                  "добавлено в базу данных"

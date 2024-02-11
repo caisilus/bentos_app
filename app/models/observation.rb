@@ -6,7 +6,7 @@ class Observation < ApplicationRecord
   def attach_base64_photo(encoded_photo, filename)
     decoded_image = Base64.decode64(encoded_photo)
 
-    observation.photos.attach(
+    photos.attach(
       io: StringIO.new(decoded_image),
       content_type: 'image/jpeg',
       filename: filename
