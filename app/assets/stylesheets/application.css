@@ -13,3 +13,37 @@
  *= require_tree .
  *= require_self
  */
+
+.main {
+    display: flex;
+}
+
+.aside {
+    flex-grow: 0.3;
+}
+
+.content {
+    flex-grow: 0.7;
+}
+#listContainer{
+    height: 500px;
+    overflow: hidden;
+    overflow-y: scroll;
+    border: black 1px solid;
+} 
+
+.launchItem:hover {
+    background-color: lightgray;
+    cursor: pointer;
+    font-weight: bold;
+} 
+
+.launchpad {
+    fill: red;
+    opacity: .5;
+}
+
+.highlightedLaunchpad {
+    fill: blue;
+    opacity: 1.0;
+}
