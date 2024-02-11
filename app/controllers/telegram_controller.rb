@@ -26,17 +26,23 @@ class TelegramController < Telegram::Bot::UpdatesController
 
     respond_with :message, text: "Модель обрабатывает запрос, подождите..."
 
-    observation = Observation.create
 
     model_output = get_model_output(photo_urls)
-    update_observation_data(photos, model_output, observation)
+    puts "====="
+    puts model_output[0]["detections"]
+
+    if model_output[0]["detections"].nil? || model_output[0]["detections"].empty?
+      return respond_with :message, text: "На фото не найдено известных моллюсков. Попробуйте другое фото"
+    end
+    observation = Observation.create
+    species_names = update_observation_data(photos, model_output, observation)
 
     if observation.photos.count == 0
       return respond_with :message, text: "Не удалось распознать моллюсков на фото."
     else
       observation.photos.each do |photo|
         response = send_photo(chat_id: message["chat"]["id"], photo: photo,
-                              caption: "Результат работы модели:")
+                              caption: "Результат работы модели: #{species_names.join(", ")}")
       end
     end
 
@@ -77,16 +83,20 @@ class TelegramController < Telegram::Bot::UpdatesController
   end
 
   private def update_observation_data(photos, model_output, observation)
+    total_species_names = []
     model_output.each_with_index do |json, i|
       species_names = json["detections"].map {|detection| detection['name']}
 
       species_names.each do |name|
         species = Species.find_or_create_by(name: name)
         observation.species << species
+        total_species_names << name
       end
 
       observation.attach_base64_photo(json["image"], "#{photos[i]["file_unique_id"]}.jpg")
     end
+
+    total_species_names.uniq
   end
 
   private def geolocation_request_keyboard_message
