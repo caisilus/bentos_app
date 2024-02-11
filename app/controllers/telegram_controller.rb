@@ -62,9 +62,15 @@ class TelegramController < Telegram::Bot::UpdatesController
 
     respond_with :message, text: "Модель обрабатывает запрос, подождите..."
 
-    observation = Observation.create
 
     model_output = get_model_output(photo_urls)
+    puts "====="
+    puts model_output[0]["detections"]
+
+    if model_output[0]["detections"].nil? || model_output[0]["detections"].empty?
+      return respond_with :message, text: "На фото не найдено известных моллюсков. Попробуйте другое фото"
+    end
+    observation = Observation.create
     species_names = update_observation_data(photos, model_output, observation)
 
     if observation.photos.count == 0
