@@ -6,15 +6,27 @@ class TelegramController < Telegram::Bot::UpdatesController
   include Telegram::Bot::UpdatesController::Session
 
   include TelegramControllerHelper
+  include DashboardHelper
 
   def start!(*)
     respond_with :message, text: "Здравствуйте! Для начала работы, отправьте фотографию моллюска, " +
                                  "найденного на побережье Азовского Моря!"
   end
 
-  def data!()
+  def data_shell!(*)
     save_context :species_name_sent
     respond_with :message, text: "Введите полное название вида моллюска"
+  end
+
+  def data_all!(*)
+    csv = generate_csv
+    send_document(chat_id: update["message"]["chat"]["id"], document: csv, caption: "Ваш csv файл:")
+  end
+
+  def dashboard!(*)
+    url = "https://benthos.streamlit.app/"
+
+    respond_with :message, text: "Ссылка на сайт с визуализацией данных наблюдений:\n#{url}"
   end
 
   def species_name_sent(*)
@@ -30,22 +42,11 @@ class TelegramController < Telegram::Bot::UpdatesController
       return respond_with :message, text: "Неизвестный вид. Попробуйте другой"
     end
 
-    data = species.observations.joins(:place)
+    data = species.get_data_for_csv
 
-    puts data
+    csv = generate_csv_for_species(data)
     write_to_csv(data)
-    respond_with :message, text: "Dummy"
-  end
-
-  private def write_to_csv(data, filename: "data.csv", separator: ",")
-    File.open(filename, "w") do |f|
-      headers = %w[observation place_id latitude longitude]
-      f.write headers.join(separator) + "\n"
-      data.each do |row|
-        csv_row = [row.id, row.place.id, row.place.latitude, row.place.longtitude]
-        f.write csv_row.join(separator) + "\n"
-      end
-    end
+    send_document(chat_id: update["message"]["chat"]["id"], document: csv, caption: "Ваш csv файл:")
   end
 
   def message(message)

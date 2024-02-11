@@ -76,4 +76,6 @@ Rails.application.configure do
 
   # Telegram settings
   config.telegram_updates_controller.session_store = :memory_store #:redis_store, {expires_in: 1.month}
+
+  config.hosts << /[a-z0-9-.]+\.ngrok-free\.app/
 end
