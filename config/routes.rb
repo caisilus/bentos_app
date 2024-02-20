@@ -7,7 +7,9 @@ Rails.application.routes.draw do
 
   namespace :api do
     namespace :v1 do
-      resources :observations, only: [:index, :show]
+      get "/observations", to: "observations#index"
+      get "/observations/distances", to: "observations#distances"
+      # resources :observations, only: [:index, :show]
     end
   end
 end

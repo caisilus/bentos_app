@@ -19,7 +19,9 @@ module DashboardHelper
     CSV.generate do |csv|
       csv << headers
 
-      Species.all.each do |species|
+      # find_each is better than all.each because it loads data from table in batches
+      # Though in this case it doesn't matter, species is small table
+      Species.find_each do |species|
         data = species.get_data_for_csv
 
         data.each do |row|
