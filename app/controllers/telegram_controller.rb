@@ -56,6 +56,7 @@ class TelegramController < Telegram::Bot::UpdatesController
 
     photos = filter_photos(message["photo"])
     photo_urls = photos.map { |photo| telegram_file_download_path(photo["file_id"]) }
+    photo_urls = [photo_urls.last]
 
     puts photo_urls
 
